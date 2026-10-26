@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CS 180/280A Fall 2026 Project 4 Part A. Technical report on homography estimation, inverse warping, feather blending and cylindrical projection. Photographic experiments pending.">
+  <title>Project 4 · Image Warping and Mosaicing · Fall 2026</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to report</a>
+  <nav class="project-bar" aria-label="Course projects">
+    <div class="project-bar-inner">
+      <span class="brand">MD Aeinul Islam · CS280A</span>
+      <div class="project-links">
+        <a href="https://md-islam.github.io/cs280-project0/">Project 0</a>
+        <a href="https://md-islam.github.io/cs280-project1/">Project 1</a>
+        <a href="https://md-islam.github.io/cs280-project2/">Project 2</a>
+        <a href="https://md-islam.github.io/cs280-project3/">Project 3</a>
+        <a href="./" aria-current="page">Project 4</a>
+        <span aria-disabled="true">Project 5</span>
+        <span aria-disabled="true">Project 6</span>
+        <span aria-disabled="true">Project 7</span>
+        <span aria-disabled="true">Project 8</span>
+      </div>
+    </div>
+  </nav>
+  <header>
+    <p class="eyebrow">UC Berkeley · CS 180/280A · Fall 2026 · Part A</p>
+    <h1>Image Warping<br>and Mosaicing</h1>
+    <p class="subtitle">Project 4 · Methods, implementation, and validation · Photographic experiments pending.</p>
+    <dl class="status">
+      <div><dt>IMPLEMENTED</dt><dd>Core algorithms and offline workflows</dd></div>
+      <div><dt>PENDING</dt><dd>Original photographs and experimental results</dd></div>
+      <div><dt>VERIFIED REQUIREMENTS</dt><dd>Fall 2026 requirements supplied from independent verification; final submission pending</dd></div>
+    </dl>
+  </header>
+  <div class="layout">
+    <nav class="report-nav" aria-label="Report sections">
+      <a href="#introduction">01 Introduction</a>
+      <a href="#acquisition">A.1 Image acquisition</a>
+      <a href="#homography">A.2 Homography recovery</a>
+      <a href="#correspondences">04 Correspondences</a>
+      <a href="#warping">A.3 Inverse warping</a>
+      <a href="#rectification">06 Rectification</a>
+      <a href="#mosaics">A.4 Planar mosaics</a>
+      <a href="#cylindrical">A.5 Cylindrical projection</a>
+      <a href="#limitations">09 Limitations</a>
+      <a href="#discussion">10 Implementation &amp; conclusions</a>
+    </nav>
+    <main id="main">
+      <section id="introduction"><p class="number">01 / CONTEXT</p><h2>Introduction</h2>
+        <p>A panorama requires a shared geometric frame and a rule for combining overlapping samples. This implementation estimates planar homographies from manual correspondences, inverse-warps each view, and blends valid samples with distance-based feather weights. Cylindrical projection provides the additional CS 280A mapping.</p>
+        <p>The methods below are implemented and covered by deterministic synthetic tests. <strong>All photographic experiments remain pending.</strong> No photographs, measured point pairs, image-specific matrices, photographic timings, or experimental observations are supplied in this report yet.</p>
+        <p>Coordinates are (x = column, y = row), with the top-left pixel center at (0, 0). Image-to-image matrices act on column vectors. The photo loader applies EXIF orientation before measurements are interpreted, converts to RGB float64 in [0, 1], and does not resize or modify originals. PNG results are rounded to 8-bit previews; NPZ files retain floating-point images, masks, and origins.</p>
+        <aside class="note"><strong>Reading this report.</strong> Equations describe the implemented methods. Numbered figure slots identify evidence still to be collected; they are not generated results.</aside>
+      </section>
+      <section id="acquisition"><p class="number">02 / INPUTS</p><h2>A.1 · Image acquisition</h2>
+        <p>The planned capture procedure is to rotate the camera around a fixed optical center while maintaining substantial overlap between adjacent views. Translation introduces parallax: points at different depths then move by different amounts, which a single homography generally cannot align. A planar subject is another setting where projective alignment is appropriate.</p>
+        <p>Capture at least two overlapping projective image sets, with enough views for the three mosaic demonstrations. Avoid moving subjects and nearby occluders; keep focus, exposure, white balance, and illumination as consistent as practical. Record the actual camera conditions, view order, overlap, and any unavoidable camera translation after capture. Do not infer camera settings from absent metadata.</p>
+        <figure id="figure-1" class="pending-figure" data-state="pending"><div class="figure-slot">Photographic image sets not yet supplied.</div><figcaption><strong>Figure 1.</strong> PENDING — Orientation-corrected source views and capture notes. These will document the acquired sets and visible overlap; no acquisition has been completed here.</figcaption></figure>
+      </section>
+      <section id="homography"><p class="number">03 / GEOMETRY</p><h2>A.2 · Homography recovery</h2>
+        <p>For a measured source point (x, y) and its destination match (u, v), homogeneous coordinates express the projective mapping up to a nonzero scale. <code>computeH(im1_pts, im2_pts)</code> maps image 1 to image 2. Its scale convention fixes h<sub>33</sub> = 1, leaving eight unknowns:</p>
+        <div class="equation" id="eq-1"><p class="equation-label">(1) Homogeneous mapping</p><pre>[u, v, 1]ᵀ ∼ H [x, y, 1]ᵀ
+    [ h11  h12  h13 ]
+H = [ h21  h22  h23 ]
+    [ h31  h32   1  ]</pre></div>
+        <p>Dividing by the homogeneous denominator gives u = (h<sub>11</sub>x + h<sub>12</sub>y + h<sub>13</sub>)/(h<sub>31</sub>x + h<sub>32</sub>y + 1), and the analogous expression for v using the second row. Rearranging supplies two independent rows per correspondence:</p>
+        <div class="equation" id="eq-2"><p class="equation-label">(2) Explicit linear system</p><pre>h = [h11, h12, h13, h21, h22, h23, h31, h32]ᵀ
+A[2i]   = [x, y, 1, 0, 0, 0, -u*x, -u*y]
+A[2i+1] = [0, 0, 0, x, y, 1, -v*x, -v*y]
+b[2i] = u;  b[2i+1] = v
+A h = b,  A ∈ ℝ^(2N×8),  b ∈ ℝ^(2N)
+ĥ = arg min_h ‖A h - b‖₂²</pre></div>
+        <p>Both input arrays must be finite real arrays of shape (N, 2), with matching shapes and N ≥ 4. <code>build_homography_system</code> exposes A and b. All cases use float64 <code>numpy.linalg.lstsq(A, b, rcond=None)</code>; with more than four pairs this fits an overdetermined system. The solution is reshaped into H with H[2, 2] = 1.</p>
+        <p>The implementation rejects an equation-system rank below eight, nonfinite coefficients, or a numerically singular H. Collinear or repeated points can be degenerate. The solve minimizes <em>algebraic</em> residual, not reprojection error; coordinates are not normalized, so large or poorly scaled coordinates may fail the numerical rank test. Fixing h<sub>33</sub> excludes homographies whose h<sub>33</sub> is zero. There is no outlier rejection or RANSAC.</p>
+      </section>
+      <section id="correspondences"><p class="number">04 / MANUAL INPUT</p><h2>Correspondences &amp; alignment evidence</h2>
+        <p>Manually select the same physical features in each adjacent pair, spread across the overlapping region rather than along one line. Measurements must use the orientation-corrected image grid. Pair i maps image i to image i+1. The supplied plotting helper displays both images with matching point indices and never requests interactive input.</p>
+        <figure id="figure-2" class="pending-figure" data-state="pending"><div class="figure-slot">Measured correspondences and alignment illustrations pending.</div><figcaption><strong>Figure 2.</strong> PENDING — Actual indexed point pairs, estimated homographies, and alignment views for the photographic sets. These will establish which features were matched and whether geometric alignment is supported.</figcaption></figure>
+        <p class="pending">PENDING — Insert real-image matrices and their coordinate directions from <code>metadata.json</code>, the measured inputs and corresponding A, b system, and independently computed reprojection errors. No image-specific matrix is shown before measurements exist.</p>
+      </section>
+      <section id="warping"><p class="number">05 / SAMPLING</p><h2>A.3 · Inverse image warping</h2>
+        <p>Forward mapping can skip destination pixels when transformed source centers do not land on every output center. Inverse warping visits every destination center and computes its source location, avoiding those forward-splatting holes wherever the inverse lies within source support. It does not create content outside the photographed region.</p>
+        <div class="equation" id="eq-3"><p class="equation-label">(3) Destination-to-source sampling</p><pre>[a, b, c]ᵀ = H⁻¹ [x_d, y_d, 1]ᵀ
+s_x = a/c;  s_y = b/c
+x_d = xmin + column;  y_d = ymin + row</pre></div>
+        <p>Both <code>warpImageNearestNeighbor</code> and <code>warpImageBilinear</code> return (float64 image, boolean valid mask, (xmin, ymin)). They accept grayscale or RGB data without intensity rescaling. The mask is true only for finite inverse coordinates in the closed source-center rectangle [0, width−1] × [0, height−1], allowing a 10<sup>−9</sup> pixel roundoff tolerance. Accepted boundary roundoff is clamped; other outside samples remain zero and invalid.</p>
+        <p><strong>Nearest neighbor</strong> reads the source at (floor(s<sub>x</sub> + 0.5), floor(s<sub>y</sub> + 0.5)); half-pixel ties go toward positive infinity. <strong>Bilinear interpolation</strong> uses fractional distances from floor coordinates and combines four values manually:</p>
+        <div class="equation" id="eq-4"><p class="equation-label">(4) Four-neighbor interpolation</p><pre>x0 = floor(s_x);  y0 = floor(s_y)
+x1 = min(x0+1, width-1); y1 = min(y0+1, height-1)
+α = s_x-x0;  β = s_y-y0
+I_d = (1-α)(1-β) I[y0,x0] + α(1-β) I[y0,x1]
+    + (1-α)β I[y1,x0]     + αβ I[y1,x1]</pre></div>
+        <p>At exact last-row or last-column samples, repeating the edge neighbor preserves its value without darkening. Nearest neighbor preserves a selected sample but can produce visible steps under magnification. Bilinear interpolates intensity changes and can soften detail; it performs more sample reads and arithmetic. Neither method supplies an area-based antialiasing filter for strong minification. No measured photographic quality or speed advantage is claimed yet.</p>
+        <p>The output box encloses the four transformed source pixel-center corners. Its minima are floored and maxima ceiled, inclusively: width = xmax−xmin+1 and height = ymax−ymin+1. Near-integer corner roundoff is snapped within 10<sup>−9</sup>. Negative coordinates remain in the returned origin. The rectangle can contain invalid pixels around the transformed footprint. A singular transform or a projective horizon touching/crossing the source is rejected. Inverse grids are processed in blocks of up to 128 rows.</p>
+      </section>
+      <section id="rectification"><p class="number">06 / RECTIFICATION</p><h2>A.3 · Two photographic rectifications</h2>
+        <p>Each experiment requires four source corners explicitly labeled TL, TR, BR, BL and a justified target rectangle size. The labels map to (0,0), (width−1,0), (width−1,height−1), (0,height−1). The CLI checks a distinct convex clockwise quadrilateral and never guesses the semantic top-left corner. Legacy positional lists warn about this ambiguity. The full source is warped into its enclosing canvas; it is not automatically cropped to the target rectangle.</p>
+        <div class="result" id="rectification-1"><h3>Rectification 1</h3><figure id="figure-3" class="pending-figure" data-state="pending"><div class="figure-slot">Source, labeled corners, nearest and bilinear results pending.</div><figcaption><strong>Figure 3.</strong> PENDING — First independent photographic rectification. Compare the same region in both interpolators and verify the intended corner-to-rectangle association.</figcaption></figure><p class="pending">PENDING — Target aspect-ratio justification, geometric assessment, edge/detail comparison, and measured nearest/bilinear timings under recorded conditions.</p></div>
+        <div class="result" id="rectification-2"><h3>Rectification 2</h3><figure id="figure-4" class="pending-figure" data-state="pending"><div class="figure-slot">Second source and paired interpolation results pending.</div><figcaption><strong>Figure 4.</strong> PENDING — Second photographic rectification, with its own corner labels and target dimensions. It will test the procedure on a different photographed plane.</figcaption></figure><p class="pending">PENDING — A separate aspect-ratio justification and interpolation/runtime comparison; do not reuse observations from the first example.</p></div>
+        <p>The CLI records actual wall times around each warp call, in nearest-then-bilinear order. For a defensible comparison, record image and output dimensions, environment, run order, repetitions, and warm-up effects. A single timing includes allocation and is not a universal benchmark. No synthetic timing is included here.</p>
+      </section>
+      <section id="mosaics"><p class="number">07 / COMPOSITION</p><h2>A.4 · Planar mosaics &amp; feather blending</h2>
+        <p>Select a reference image with identity transform. <code>compose_to_reference</code> chains adjacent source-to-destination matrices or their inverses into that frame. With column vectors, order matters: H<sub>ac</sub> = H<sub>bc</sub> H<sub>ab</sub>, with the rightmost mapping applied first. Composed matrices are checked for finite values and numerical rank; h<sub>33</sub> is not renormalized after composition.</p>
+        <p><code>create_panorama</code> computes each transformed corner box, takes their union, and places the existing bilinear warps and masks at exact integer offsets on one shared canvas. The returned origin carries the reference coordinates of its top-left sample. All images must share grayscale or RGB channel layout; dimensions may differ.</p>
+        <div class="equation" id="eq-5"><p class="equation-label">(5) Mask-aware feather weights</p><pre>d_i(p) = distance to nearest invalid mask pixel
+w_i(p) = d_i(p) / Σ_j d_j(p), when Σ_j d_j(p) &gt; 0
+I_out(p) = Σ_i w_i(p) I_i(p)
+M_union(p) = [Σ_j d_j(p) &gt; 0]</pre></div>
+        <p>A SciPy Euclidean distance transform measures distance within each valid mask, with a one-pixel invalid ring padded outside the canvas so valid edge pixels still receive positive weights. Weights are zero outside a mask and sum to one on the union. A single contributor preserves its value; overlap is a convex weighted average. Where there is no contributor, the image and weights remain zero and the mask is false.</p>
+        <p>Validity depends on masks, not whether RGB values are nonzero, so true black pixels contribute correctly. Gradual weights reduce abrupt boundary transitions. They cannot correct misregistered edges, parallax, moving objects, or exposure differences; overlap may still show ghosts or seams. There is no exposure compensation or multiband blending.</p>
+        <div class="result" id="panorama-1"><h3>Photographic mosaic 1</h3><figure id="figure-5" class="pending-figure" data-state="pending"><div class="figure-slot">Original views · correspondence panels · blended mosaic</div><figcaption><strong>Figure 5.</strong> PENDING — First photographic mosaic, retaining original views and manual correspondences alongside the blended result so alignment and overlap can be assessed.</figcaption></figure><p class="pending">PENDING — Reference-frame choice, overlap alignment, visible seams/exposure changes, and scene-specific limitations.</p></div>
+        <div class="result" id="panorama-2"><h3>Photographic mosaic 2</h3><figure id="figure-6" class="pending-figure" data-state="pending"><div class="figure-slot">Original views · correspondence panels · blended mosaic</div><figcaption><strong>Figure 6.</strong> PENDING — Second photographic mosaic with its own source and correspondence evidence; inspect whether feathering hides boundaries without obscuring misalignment.</figcaption></figure><p class="pending">PENDING — Independent observations of overlap, seams, exposure, and any parallax or moving-subject artifacts.</p></div>
+        <div class="result" id="panorama-3"><h3>Photographic mosaic 3</h3><figure id="figure-7" class="pending-figure" data-state="pending"><div class="figure-slot">Original views · correspondence panels · blended mosaic</div><figcaption><strong>Figure 7.</strong> PENDING — Third photographic mosaic, with source order and manual matches visible for comparison to the final blend.</figcaption></figure><p class="pending">PENDING — Scene-specific alignment/blending observations and a supported comparison to the other two sets.</p></div>
+      </section>
+      <section id="cylindrical"><p class="number">08 / CS 280A EXTENSION</p><h2>A.5 · Cylindrical projection</h2>
+        <p><code>cylindrical_warp</code> requires a positive finite focal length f measured in pixels. It assumes a centered principal point c<sub>x</sub> = (width−1)/2 and c<sub>y</sub> = (height−1)/2, without estimating calibration. The centered cylindrical grid uses these forward and inverse equations:</p>
+        <div class="equation" id="eq-6"><p class="equation-label">(6) Forward cylindrical coordinates</p><pre>u = f atan((x-c_x)/f)
+v = f (y-c_y) / √((x-c_x)² + f²)</pre></div>
+        <div class="equation" id="eq-7"><p class="equation-label">(7) Inverse cylindrical sampling</p><pre>θ = u/f;  |θ| &lt; π/2
+x = f tan(θ) + c_x
+y = v/cos(θ) + c_y</pre></div>
+        <p>The code evaluates the forward map with <code>atan2</code> and <code>hypot</code>. Horizontal extrema come from the side edges; vertical extrema occur on x = c<sub>x</sub>, so transforming only four corners would miss part of the curved region. Inclusive integer bounds enclose that region. Output [row, column] has coordinates (umin+column, vmin+row).</p>
+        <p>For each valid inverse sample, the shared manual bilinear helper samples the original image directly. The workflow projects each original once, then places the projection and mask without a second interpolation pass. Invalid regions are zero with mask false, using the same finite-source and roundoff conventions as planar warping. There is no angular wrapping.</p>
+        <div class="equation" id="eq-8"><p class="equation-label">(8) Supported cylindrical alignment</p><pre>u_reference = u_local + offset_i
+For equal f and pure yaw: offset_i = f × yaw_i
+The workflow accepts integer-pixel horizontal offsets only.</pre></div>
+        <p>A cylindrical surface can represent a wider horizontal field of view without projecting all views onto one tangent plane, but it still assumes suitable camera motion and calibration. The pure-yaw relation uses radians and a chosen consistent reference direction. Arbitrary planar homographies cannot be reused unchanged after projection. The current CLI requires supplied integer offsets; it does not estimate alignment, support fractional shifts, or model pitch, roll, camera translation, or lens distortion.</p>
+        <p>With even source dimensions, the principal point is half-integer while the cylindrical output grid is centered on integers. Consequently a very large f does not generally reproduce the original pixel lattice exactly. Very small f may leave only a narrow sampled region. These are sampling/model limitations rather than evidence from a photograph.</p>
+        <figure id="figure-8" class="pending-figure" data-state="pending"><div class="figure-slot">Original images · individual projections · aligned cylindrical mosaic</div><figcaption><strong>Figure 8.</strong> PENDING — Actual CS 280A cylindrical demonstration. Source and projected views, justified focal length, declared offsets, and a blended mosaic will show whether the chosen alignment is supported.</figcaption></figure>
+        <p class="pending">PENDING — Real-photo focal-length rationale, offset determination, overlap assessment, wider-view comparison, and observed projection artifacts. The photographic A.5 deliverable is not complete.</p>
+      </section>
+      <section id="limitations"><p class="number">09 / SCOPE</p><h2>Numerical &amp; practical limitations</h2>
+        <p>The homography is a global projective model; there is no automatic matching, robust fitting, or geometric refinement. Manual matches and corner semantics need review. A mask records sampling support, not a semantic foreground. Bilinear interpolation cannot recover absent detail and is not a full minification filter.</p>
+        <p>Canvases above 25 million pixels are rejected. Panorama arrays also have an estimated 512 MiB budget for retained layers, masks, weights, output, and distance workspace. Cylindrical output has a separate 512 MiB estimate including its source copy. Neither estimate bounds process RSS: source conversions can happen before the check, projected views are retained, and row-block temporaries and caller-owned images consume additional memory. A planar RGB float64 output alone at the pixel cap uses 600 MB before its mask and temporary arrays.</p>
+        <p>Photo configuration templates are intentionally incomplete and fail before any fallback processing. Completed runs require a new output directory; a disk-write failure may leave a partial new directory for inspection. Original-image hashes and measured parameters are recorded in metadata. No existing input image is rewritten.</p>
+        <p class="pending">PENDING — Observed real-photo failure cases and their causes, separated from these known implementation limitations.</p>
+      </section>
+      <section id="discussion"><p class="number">10 / DISCUSSION</p><h2>Validation &amp; supported conclusions</h2>
+        <p>The local tests independently reproject synthetic correspondences and check known identity, translation, affine, perspective, overdetermined, and noisy cases. Warping tests check analytical pixel values, origins, masks, exact edges, negative coordinates, and invalid transforms for grayscale and RGB arrays. Integration tests check noncommuting transform composition, shared-canvas placement, feather weights, cylindrical camera-ray geometry, and single-pass sampling.</p>
+        <p>These checks support the implementation's coordinate conventions and behavior on their deterministic synthetic inputs. They do not establish alignment quality, visual quality, or performance on photographs. No synthetic benchmark timing, photographic matrix, or invented result is reported here. Core numerical operations use NumPy; Pillow decodes local images, Matplotlib renders figures, and SciPy supplies only the feather-weight distance transform.</p>
+        <h3>Conclusions from the implemented methods</h3>
+        <p>Inverse sampling makes output support explicit through a mask and origin. Feathering combines valid aligned samples without treating black as missing data, while geometric accuracy remains the responsibility of the estimated transforms. Cylindrical projection changes the alignment coordinate frame and therefore requires its own supported alignment model. Photographic conclusions must wait for measured experiments.</p>
+        <h3>Real-photograph observations — pending</h3>
+        <p class="pending">PENDING — Compare the two rectifications, three photographic mosaics, and real cylindrical demonstration; explain observed successes and failures using the actual figures and recorded parameters.</p>
+        <h3>Sources, acknowledgments &amp; submission status</h3>
+        <p>The Fall 2026 <a href="https://cal-cs180.github.io/fa26/hw/proj3/index.html">project overview</a>, <a href="https://cal-cs180.github.io/fa26/hw/proj3/partA.html">Part A assignment</a>, and <a href="https://cal-cs180.github.io/fa26/hw/submitting.html">submission instructions</a> were supplied as externally verified sources. No webpage was fetched during this offline milestone.</p>
+        <p class="pending">PENDING — Add actual photo-source acknowledgments and all course-required assistance disclosures after checking the applicable policy. No policy or provenance is invented, and required disclosures must not be removed.</p>
+        <p>Final submission remains pending: print the completed hosted webpage to <code>web/page.pdf</code> with its real URL in the header/footer; validate the code/web ZIP limits (100 MB, 256 files), separately submit the PDF, tag sections, and confirm receipt. No public URL is available here.</p>
+      </section>
+    </main>
+  </div>
+  <footer>Project 4 · Part A · Local technical report · Photographic results and final submission pending.</footer>
+</body>
+</html>
