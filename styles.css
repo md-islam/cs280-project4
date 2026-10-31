@@ -127,3 +127,26 @@ th,td { text-align:left; padding:.5rem; border-bottom:1px solid var(--line); ove
  table {break-inside:avoid;}
  caption {break-after:avoid;}
 }
+
+/* Combined report additions retain the existing Part A typography and colors. */
+.partb-links {display:flex;flex-wrap:wrap;gap:.5rem 1rem;font-size:.9rem;}
+.table-scroll {max-width:100%;overflow-x:auto;}
+.table-scroll table {font-size:.76rem;table-layout:fixed;}
+.table-scroll th,.table-scroll td {padding:.4rem .25rem;}
+.partb-figure {margin:1.5rem 0;}
+.partb-figure .image-view img {max-height:none;}
+main {min-width:0;}
+@media(max-width:600px) {
+ .table-scroll table {font-size:.65rem;}
+ .table-scroll th,.table-scroll td {padding:.3rem .1rem;}
+ .partb-figure {margin:1rem 0;}
+}
+@media print {
+ .partb-figure {break-inside:avoid;page-break-inside:avoid;}
+ .partb-figure .image-view img {max-height:130mm;object-fit:contain;}
+ .partb-figure figcaption {break-before:avoid;}
+ .table-scroll {overflow:visible;}
+ .table-scroll table {font-size:7pt;}
+ .partb-links {display:none;}
+ h2,h3 {break-after:avoid;}
+}
