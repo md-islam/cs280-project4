@@ -150,3 +150,99 @@ main {min-width:0;}
  .partb-links {display:none;}
  h2,h3 {break-after:avoid;}
 }
+
+/* Keep labels at their intended print size rather than shrinking tall diagrams. */
+@media print {
+ .partb-figure .image-view img {max-height:178mm;}
+ .partb-figure {margin:4mm 0;}
+ #figure-17 .image-view img,#figure-18 .image-view img {max-height:180mm;}
+ #figure-32 .image-view img {max-height:150mm;}
+ .table-scroll th,.table-scroll td {overflow-wrap:normal;word-break:normal;}
+}
+
+@media print {
+ #figure-14 .comparison {grid-template-columns:repeat(2,minmax(0,1fr));gap:3mm;align-items:start;}
+ #figure-14 .comparison img {max-height:none;}
+}
+
+/* Keep the RANSAC method, measurement table and first result close in print. */
+@media print {
+ #b4 .equation {margin:3mm 0;}
+ #b4 .table-scroll table {margin:3mm 0;}
+}
+/* Part B uses the same content on screen and in print; Part A is unchanged. */
+.part-b h2 {margin-bottom:1rem;}
+.part-b h3 {margin-top:1.6rem;}
+.part-b .method-steps {padding-left:1.4rem;}
+.part-b .method-steps li {margin:.45rem 0;padding-left:.2rem;}
+.part-b .table-scroll table {font-size:.85rem;}
+.part-b th,.part-b td {font-variant-numeric:tabular-nums;}
+.part-b .report-panels {display:grid;gap:1rem;align-items:start;}
+.part-b .comparison-panels {grid-template-columns:repeat(2,minmax(0,1fr));}
+.part-b .pyramid-panels {grid-template-columns:4fr 3fr 2fr;align-items:end;}
+.part-b .report-panel {min-width:0;}
+.part-b .panel-label {font-size:.85rem;font-weight:650;line-height:1.4;margin:0 0 .5rem;}
+.part-b .report-panel img {width:100%;height:auto;max-height:none;}
+.part-b .comparison-download {display:inline-block;font-size:.8rem;margin-top:.65rem;}
+.part-b figcaption {font-size:.86rem;line-height:1.5;}
+@media(max-width:640px) {
+ .part-b .comparison-panels,.part-b .pyramid-panels {grid-template-columns:1fr;}
+ .part-b .pyramid-panels .level-1 {width:75%;}
+ .part-b .pyramid-panels .level-2 {width:50%;}
+ .part-b .table-scroll table {font-size:.73rem;}
+ .part-b h2 {font-size:1.65rem;}
+}
+@media print {
+ .part-b {padding:4mm 0;}
+ .part-b h2 {font-size:18pt;margin:0 0 3mm;}
+ .part-b h3 {font-size:11.5pt;margin:4mm 0 2mm;}
+ .part-b .equation {margin:3mm 0;}
+ .part-b .method-steps {margin:2mm 0;}
+ .part-b .method-steps li {margin:1mm 0;}
+ .part-b .table-scroll table,.part-b > table {font-size:8.1pt;line-height:1.35;margin:3mm 0;}
+ .part-b table th,.part-b table td {padding:2mm 1mm;}
+ .part-b .partb-figure {margin:3mm 0;break-inside:avoid;page-break-inside:avoid;}
+ .part-b .report-panels {gap:3mm;}
+ .part-b .comparison-panels {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .part-b .pyramid-panels {grid-template-columns:4fr 3fr 2fr;}
+ .part-b .pyramid-panels .level-1,.part-b .pyramid-panels .level-2 {width:auto;}
+ .part-b .panel-label {font-size:9pt;line-height:1.3;margin:0 0 2mm;}
+ .part-b .report-panel img {max-height:none;}
+ .part-b figcaption {font-size:8.5pt;line-height:1.4;padding-top:2mm;}
+ .part-b .comparison-download {display:none;}
+ .part-b .table-scroll {overflow:visible;}
+}
+
+.part-b .table-hint {display:none;}
+@media(max-width:640px) {
+ .part-b .geometry-table {min-width:620px;table-layout:auto;}
+ .part-b .geometry-table th,.part-b .geometry-table td {overflow-wrap:normal;word-break:normal;white-space:nowrap;}
+ .part-b .table-hint {display:block;font-size:.78rem;color:var(--muted);margin:.4rem 0;}
+}
+@media print {
+ #b1.part-b {break-before:page;page-break-before:always;}
+ .part-b .geometry-table {min-width:0;table-layout:fixed;}
+ .part-b .geometry-table th,.part-b .geometry-table td {white-space:normal;}
+ .part-b .table-hint {display:none;}
+}
+/* Targeted screen navigation and print flow; image sizes are retained. */
+.status {grid-template-columns:repeat(4,minmax(0,1fr));}
+@media(max-width:740px) {.status {grid-template-columns:1fr;}}
+@media print {
+ #correspondences table {margin:3mm 0;}
+ #correspondences table th,#correspondences table td {padding:1.5mm 2mm;}
+ #warping .equation {margin:3mm 0;padding:2mm 3mm;}
+ #warping h2 {margin-bottom:2mm;}
+ #warping {padding-bottom:2mm;}
+ #warping > p:last-child {margin:1mm 0 0;}
+ #warping .equation:last-of-type {margin-bottom:1mm;}
+ #rectification {break-before:page;page-break-before:always;padding-top:2mm;}
+ #rectification h2 {margin-bottom:2mm;}
+ #rectification h3 {margin:2mm 0;}
+ #rectification > p:not(.number) {margin:2mm 0;}
+ #figure-5 {margin:2mm 0;}
+ #b2 > p:last-of-type {break-inside:avoid;page-break-inside:avoid;}
+ #b4 .method-steps {break-inside:avoid;page-break-inside:avoid;}
+ #b4 > p:first-of-type {break-inside:avoid;page-break-inside:avoid;break-after:avoid;page-break-after:avoid;}
+ #combined-conclusions {break-before:page;page-break-before:always;}
+}
