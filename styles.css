@@ -246,3 +246,11 @@ main {min-width:0;}
  #b4 > p:first-of-type {break-inside:avoid;page-break-inside:avoid;break-after:avoid;page-break-after:avoid;}
  #combined-conclusions {break-before:page;page-break-before:always;}
 }
+
+@media print {
+ #b1 > p:nth-of-type(2) {break-inside:avoid;page-break-inside:avoid;}
+ #combined-conclusions {break-before:auto;page-break-before:auto;break-inside:avoid;page-break-inside:avoid;}
+ #figure-25 .comparison-panels,#figure-26 .comparison-panels,#figure-27 .comparison-panels {grid-template-columns:1fr;gap:2.5mm;}
+ #figure-25,#figure-26,#figure-27 {break-before:page;page-break-before:always;margin:3mm 0;}
+ #figure-25 .panel-label,#figure-26 .panel-label,#figure-27 .panel-label {font-size:9.5pt;}
+}
